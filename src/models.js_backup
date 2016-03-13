@@ -1,5 +1,4 @@
 /* import app's mongodb (configured in server.js) and create a schema(?). Set up CRUD operations and appropriate error handlers */
-
 var ObjectID = require('mongodb').ObjectID;
 // Users module
 var Users = module.exports.Users = function(req){
@@ -9,8 +8,9 @@ var Users = module.exports.Users = function(req){
         var that = {};
         that._type = "users";
         that._essential = ['name', 'email'];
-        that._updatable = ['name', 'posts', 'comments'];
+        that._unique = ['email'];
         that.body = {};
+        //that.name = req? req.body.name : "Clarence";
         //more robust and proper query/body etc methods
         that.body.posts = [];
         that.body.comments = req.body.comments || [];
@@ -25,18 +25,17 @@ var Users = module.exports.Users = function(req){
     var crudsworth = crudder(that.schema);
     that.create = crudsworth.create();
     that.read = crudsworth.read();
-    that.update = crudsworth.update();
+    that.update = crudsworth.update({email:{isId: false}, name:{isId: false}, posts:{isId: true}, comments:{isId: true}});
     that.delete = crudsworth.delete();
     return that;
 };
-
+// Posts module
 var Posts = module.exports.Posts = function(req){
     var that = {};
     that.schema = (function(){
         var that = {};
         that._type = "posts";
         that._essential = ['createdBy', 'title', 'content'];
-        that._updatable = ['title','content'];
         that.body = {};
         if(req.body.createdBy || req.query.createdBy || req.params.createdBy)
             that.body.createdBy = req.body.createdBy || req.query.createdBy || req.params.createdBy;
@@ -67,8 +66,8 @@ var Posts = module.exports.Posts = function(req){
         });
     }());
     that.read = crudsworth.read();
-    that.update = crudsworth.update();
-    that.delete = crudsworth.delete();
+    that.update = crudsworth.update({title:{isId: false}, content:{isId: false}});
+        that.delete = crudsworth.delete();
     return that;
 };
 
@@ -79,6 +78,20 @@ var crudder = function(schema){
             var crudObject = db.collection(schema._type);
             schema.body.createdAt = new Date().getTime();
             console.log(schema);
+            var counter = 0;
+            if(schema._unique)
+            {schema._unique.forEach(function(key){
+                var searchObject = {};
+                searchObject[key] = schema.body[key];
+                var checker = crudObject.findOne(searchObject);
+                if(Object.keys(checker).length === 0 || JSON.stringify(checker) === JSON.stringify({}))
+                    counter++;
+            });
+            }
+            if(counter !== 0)
+                console.log("email already exists");
+            else
+            {
                 console.log("inserting this object");
             var safe = true;
             // if(Object.keys(schema.body).length !== 0 || JSON.stringify(schema) !== JSON.stringify({}))
@@ -99,7 +112,7 @@ var crudder = function(schema){
                 else{
             crudObject.insert(schema.body, function(error,result){
                 if (error)
-                    throw error;
+                    throw error("Something went wrong");
                 else
                 {
                     if(hook)
@@ -107,6 +120,7 @@ var crudder = function(schema){
                     callback(result);
                 }
             });
+            }
             }
             }
     };
@@ -123,35 +137,56 @@ var crudder = function(schema){
         return function(db,callback){
             var crudObject = db.collection(schema._type);
             // findOne with given id and, if not found return error code 4xx not found. else update
-            var set = {};
-            schema._updatable.forEach(function(key){
-                if(schema.body[key])
-                    set[key] = schema.body[key];
-                
+            if(mapObject)
+            {
+                var set = {}, push = {};
+            Object.keys(mapObject).forEach(function(key){
+                if(schema.body[key]){
+                    if(mapObject[key].isId === false)
+                        set[key] = schema.body[key];
+                    else if(mapObject[key].isId === true){
+                            push[key] = schema.body[key];
+                    }
+                }
             });
-            console.log(JSON.stringify(set));
-            if(Object.keys(set).length !== 0 && JSON.stringify(set) !== JSON.stringify({}))
-                return crudObject.updateOne({_id: schema.body._id}, {$set: set}, function(error, result){
-                if(error)
-                    throw error;
+                console.log(JSON.stringify(push));
+                console.log(JSON.stringify(set));
+                if(Object.keys(set).length !== 0 && JSON.stringify(set) !== JSON.stringify({}))
+                    return crudObject.updateOne({_id: schema.body._id}, {$set: set}, function(error, result){
+                    if(error)
+                            throw error("Something went wrong");
+                        else
+                            callback(result);
+                    });
+                else if(Object.keys(push).length !== 0 && JSON.stringify(push) !== JSON.stringify({}))
+                    return crudObject.updateOne({_id: schema.body._id}, {$push: push}, function(error, result){
+                        callback(result);
+                    });
                 else
-                    callback(result);
-                });
+                    return null;
+            }
             else
-                return error;
+                return null;
         };
     };
     
-    that.delete = function(hook){
+    that.delete = function(){
         return function(db,callback){
             var crudObject = db.collection(schema._type);
             // findOne with given id and, if not found return error code 4xx not found. else delete
+
+            var temp = crudObject.findOne({_id: schema.body._id}, function(error,result){
+                if (error)
+                    throw error("Something went wrong");
+                else
+                    callback(result);
+            });
+            if(temp === null)
+                throw error("Object not found");
             return crudObject.deleteOne({_id: schema.body._id}, function(error,result){
                 if(error)
-                    throw error;
+                    throw error("Nyaah");
                 else
-                    if(hook)
-                        hook();
                     callback(result);
             });
             
@@ -159,3 +194,13 @@ var crudder = function(schema){
     };
     return that;
 };
+
+
+
+
+
+
+
+
+
+
