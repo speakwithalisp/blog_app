@@ -14,7 +14,6 @@ var ObjectID = require('mongodb').ObjectID;
 var GridStore = require('mongodb').GridStore;
 var Grid = require('mongodb').Grid;
 var db = require('./db.js');
-
 /*        MIDDLEWARE 
 
 configure app to use bodyParser()

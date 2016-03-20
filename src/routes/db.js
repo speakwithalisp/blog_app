@@ -4,16 +4,23 @@ var Server = require('mongodb').Server;
 var ObjectID = require('mongodb').ObjectID;
 var GridStore = require('mongodb').GridStore;
 var Grid = require('mongodb').Grid;
-
-var db = module.exports = new Db('newTest', new Server('localhost', 27017));
+var db;
+if(process.env.TEST_MODE !== 'on')
+    db = module.exports = new Db('newTest', new Server('localhost', 27017),{auto_reconnect: true});
+else
+    db = module.exports = new Db('testCases', new Server('localhost', 27017), {auto_reconnect: true});
 //Set indexes for the three collections
 
 
 // USERS
 
 db.createCollection('users',{strict:true}).then(function(collection){});
-db.collection('users').createIndex({"email":1},{unique: true},  function(err, results) {
-         console.log(results);
+
+db.collection('users').createIndex({email: 1},{unique: true},  function(err, results) {
+    if(err){
+        db.close();
+    }
+    console.log(results);
 });
 
 //POSTS
@@ -29,3 +36,4 @@ db.open(function(err, db) {
         throw err;
 
 });
+

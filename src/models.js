@@ -8,12 +8,13 @@ var Users = module.exports.Users = function(req){
     that.schema = (function(){
         var that = {};
         that._type = "users";
-        that._essential = ['name', 'email'];
+        that._essential = ['name', 'email', 'password'];
         that._updatable = ['name', 'posts', 'comments'];
         that.body = {};
         //more robust and proper query/body etc methods
         that.body.posts = [];
         that.body.comments = req.body.comments || [];
+        that.body.password = req.body.password; 
         if(req.body.name || req.query.name || req.params.name)
             that.body.name = req.body.name || req.query.name || req.params.name;
         if(req.params.id || req.body._id || req.query._id)
@@ -24,7 +25,9 @@ var Users = module.exports.Users = function(req){
     }());
     var crudsworth = crudder(that.schema);
     that.create = crudsworth.create();
-    that.read = crudsworth.read();
+    that.read = crudsworth.read({},{password:0});
+    that.readOne = crudsworth.read({email: that.schema.body.email},{password:0});
+    that.readForPass = crudsworth.read({email: that.schema.body.email});
     that.update = crudsworth.update();
     that.delete = crudsworth.delete();
     return that;
@@ -61,9 +64,9 @@ var Posts = module.exports.Posts = function(req){
         return crudsworth.create(function (db){
         var updateUser = Users(myReq);
         updateUser.schema.body.posts = that.schema.body._id;
-        console.log(that.schema);
+        console.log(that.schema.body._id);
         console.log(updateUser.schema);
-            return updateUser.update(db,function(){console.log("success");});
+            return updateUser.updateOne(db,function(){console.log("success");});
         });
     }());
     that.read = crudsworth.read();
@@ -111,15 +114,17 @@ var crudder = function(schema){
             }
     };
     };
-    that.read = function(){
+    that.read = function(toRead, options){
         return function(db, callback){
             var crudObject = db.collection(schema._type);
-            return crudObject.find(schema.body).toArray(function(err,result){
+            if(!options)
+                options = {};
+            return crudObject.find(toRead, options).toArray(function(err,result){
                 callback(result);
             });
         };
     };
-    that.update = function(mapObject){
+    that.update = function(){
         return function(db,callback){
             var crudObject = db.collection(schema._type);
             // findOne with given id and, if not found return error code 4xx not found. else update
@@ -146,7 +151,7 @@ var crudder = function(schema){
         return function(db,callback){
             var crudObject = db.collection(schema._type);
             // findOne with given id and, if not found return error code 4xx not found. else delete
-            return crudObject.deleteOne({_id: schema.body._id}, function(error,result){
+            return crudObject.deleteOne({id: schema.body._id}, function(error,result){
                 if(error)
                     throw error;
                 else
