@@ -12,7 +12,8 @@ var Users = module.exports.Users = function(req){
         that._updatable = ['name', 'posts', 'comments'];
         that.body = {};
         //more robust and proper query/body etc methods
-        that.body.posts = [];
+        //IMPORTANT change the posts handling immediately
+        that.body.posts = req.body.posts || [];
         that.body.comments = req.body.comments || [];
         that.body.password = req.body.password; 
         if(req.body.name || req.query.name || req.params.name)
@@ -20,7 +21,7 @@ var Users = module.exports.Users = function(req){
         if(req.params.id || req.body._id || req.query._id)
             that.body._id = new ObjectID(req.params.id || req.body._id || req.query._id);
         if(req.body.email || req.query.email || req.params.email)
-            that.body.email = req.body.email || req.query.email || req.params.email;
+            that.body.email = req.params.email || req.body.email || req.query.email;
         return that;
     }());
     var crudsworth = crudder(that.schema);
@@ -41,8 +42,10 @@ var Posts = module.exports.Posts = function(req){
         that._essential = ['createdBy', 'title', 'content'];
         that._updatable = ['title','content'];
         that.body = {};
-        if(req.body.createdBy || req.query.createdBy || req.params.createdBy)
-            that.body.createdBy = req.body.createdBy || req.query.createdBy || req.params.createdBy;
+        if(req.decoded)
+            that.body.createdBy = req.decoded.email;
+        /*if(req.body.createdBy || req.query.createdBy || req.params.createdBy)
+            that.body.createdBy = req.body.createdBy || req.query.createdBy || req.params.createdBy; */
         if(req.params.id)
             that.body._id = new ObjectID(req.params.id);
         if(req.body.title || req.query.title || req.params.title)
@@ -56,20 +59,24 @@ var Posts = module.exports.Posts = function(req){
         return that;
     }());
     var crudsworth = crudder(that.schema);
-    that.create = (function(){
-        var myReq = req;
-        myReq.body = {};
-        myReq.body._id = that.schema.body.createdBy;
-        // Return create with a hook that updates our db and takes a closured db variable
-        return crudsworth.create(function (db){
-        var updateUser = Users(myReq);
-        updateUser.schema.body.posts = that.schema.body._id;
-        console.log(that.schema.body._id);
-        console.log(updateUser.schema);
-            return updateUser.updateOne(db,function(){console.log("success");});
+    that.create = crudsworth.create(function(db,callback){
+        var userReq = {};
+        userReq.params = {};
+        userReq.query = {};
+        userReq.body = {email: that.schema.body.createdBy};
+        var author = Users(userReq);
+        author.readOne(db, function(result){
+            var user = result.pop();
+            user.posts.push(that.schema.body._id);
+            console.log(user);
+            Users({body: user, req: {}, params: {}}).update(db, function(resl){callback(resl);});
         });
-    }());
-    that.read = crudsworth.read();
+
+        /*user.forEach(function(elt){console.log(elt);});
+         console.log(user.posts); */
+        
+    });
+    that.read = crudsworth.read({});
     that.update = crudsworth.update();
     that.delete = crudsworth.delete();
     return that;
@@ -90,7 +97,7 @@ var crudder = function(schema){
                     if (schema.body[elt].length === 0)
                         safe = false;
                     });
-            } catch(error){
+            } catch (error){
                 safe = false;
             }
             finally{
@@ -105,11 +112,12 @@ var crudder = function(schema){
                     throw error;
                 else
                 {
-                    if(hook)
-                        hook(db);
-                    callback(result);
+                    if(typeof(hook) !== 'function')
+                        callback(result);
                 }
             });
+                    if(typeof(hook) === 'function')
+                        hook(db, callback);
             }
             }
     };
@@ -120,6 +128,8 @@ var crudder = function(schema){
             if(!options)
                 options = {};
             return crudObject.find(toRead, options).toArray(function(err,result){
+                if(err)
+                    throw err;
                 callback(result);
             });
         };
@@ -136,7 +146,7 @@ var crudder = function(schema){
             });
             console.log(JSON.stringify(set));
             if(Object.keys(set).length !== 0 && JSON.stringify(set) !== JSON.stringify({}))
-                return crudObject.updateOne({_id: schema.body._id}, {$set: set}, function(error, result){
+                return crudObject.updateOne({email: schema.body.email}, {$set: set}, function(error, result){
                 if(error)
                     throw error;
                 else
@@ -151,7 +161,7 @@ var crudder = function(schema){
         return function(db,callback){
             var crudObject = db.collection(schema._type);
             // findOne with given id and, if not found return error code 4xx not found. else delete
-            return crudObject.deleteOne({id: schema.body._id}, function(error,result){
+            return crudObject.deleteOne({email: schema.body.email}, function(error,result){
                 if(error)
                     throw error;
                 else

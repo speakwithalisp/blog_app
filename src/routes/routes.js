@@ -7,6 +7,7 @@ var bodyParser = require('body-parser');
 var app = module.exports = require('../app.js');
 var router = require('./router.js');
 var userRoutes = require('./users.js');
+var postRoutes = require('./posts.js');
 var MongoClient = require('mongodb').MongoClient;
 var Db = require('mongodb').Db;
 var Server = require('mongodb').Server;
@@ -34,6 +35,9 @@ app.get('/', function(req, res){
 });
 app.use('/api', router);
 
+app.use(function(req, res, next) {
+  res.status(404).send('Sorry cant find that!');
+});
 
 
 

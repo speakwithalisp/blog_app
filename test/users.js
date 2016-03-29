@@ -4,8 +4,8 @@ var assert = require('assert');
 var request = require('supertest');
 var app = require('../src/routes/routes.js');
 
-describe('express rest api server', function(){
-    var id
+describe('express rest api server tests for user CRUD', function(){
+    var token
 
     it('checks for empty collection', function(done){
 request(app)
@@ -62,13 +62,34 @@ request(app)
               done() 
     })
   })
+
+    it('logs in to first account', function(done){
+            request(app)
+            .post('/api/login')
+            .set('Accept', 'application/json')
+            .set('Connection', 'keep-alive')
+            .send({email: 'test@test.com',
+                   password: 'supercalifragilistest'})
+            .expect('Content-Type', 'application/json; charset=utf-8')
+            .end(function (err, res) {
+                if(err)
+                    done(err)
+                else{
+                    token = res.body.token
+                    done()
+                }
+                })
+    })
     it('edits and updates object', function(done){
 request(app)
             .put('/api/users/test@test.com')
-            .send({name: 'Janardan',})
+            .set('x-access-token', token)
+            .send({name: 'Janardan'})
             .end(function(err, res){
-                expect(res.ok).to.eql(1)
+                done()
             })
+    })
+    it('checks for the change', function(done){
         request(app)
             .get('/api/users/test@test.com')
             .end(function(err, res){
@@ -80,9 +101,12 @@ request(app)
     it('deletes object', function(done){
 request(app)
             .delete('/api/users/test@test.com')
+            .set('x-access-token', token)
             .end(function(err, res){
-                expect(res.ok).to.eql(1)
-                      })
+                done()
+            })
+    })
+    it('checks deletion', function(done){
         request(app)
             .get('/api/users/test@test.com')
             .expect(404)
@@ -93,12 +117,27 @@ request(app)
                     done() 
             })
   })
+        it('logs in to second account', function(done){
+            request(app)
+                .post('/api/login')
+                .send({email: 'test@test1.com',
+                       password: 'supercalifragilistest'})
+                .set('Accept', 'application/json')
+                .expect('Content-Type', 'application/json; charset=utf-8')
+                .end(function (err, res) {
+                    token  = res.body.token;
+                    done()
+                })
+        })
     it('deletes object', function(done){
 request(app)
             .delete('/api/users/test@test1.com')
+            .set('x-access-token', token)
             .end(function(err, res){
-                expect(res.message).to.eql('Successfully deleted!')
+                done()
             })
+    })
+    it('checks for deletion', function(done){
         request(app)
             .get('/api/users/test@test1.com')
             .expect(404)

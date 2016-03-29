@@ -44,13 +44,13 @@ router.route('/login')
 
                                     message: 'password does not match!'
 
-                            });
+                                });
                             var that = {};
                             Object.keys(result[0]).forEach(function(key){
                                 if(key !== 'password')
-                                    that[key] = result[key];
+                                    that[key] = result[0][key];
                                 
-                            });
+                            }); 
                             var token = jwt.sign(that, 'Ivegotabikeyoucanrideitifyoulike', {
                                 expiresIn: 1440*60 // expires in 24 hours
 
@@ -67,41 +67,7 @@ router.route('/login')
                 }
         });
     });
-/*
-router.use(function(req, res, next) {
-    // check header or url parameters or post parameters for token
-    if(req.method === 'GET')
-        next(null);
-    else
-    {
-        var token = req.body.token || req.query.token || req.headers['x-access-token'];
-  // decode token
-        if (token) {
 
-    // verifies secret and checks exp
-      jwt.verify(token, 'Ivegotabikeyoucanrideitifyoulike', function(err, decoded) {      
-      if (err) {
-        res.json({ success: false, message: 'Failed to authenticate token.' });    
-      } else {
-        // if everything is good, save to request for use in other routes
-        req.decoded = decoded;    
-        next();
-      }
-    });
-
-  } else {
-
-    // if there is no token
-    // return an error
-    res.status(403).send({ 
-        success: false, 
-        message: 'No token provided.' 
-    });
-    
-  }
-    }
-});
- */
 
 router.route('/users')
     .all(function (req,res,next){
@@ -172,23 +138,67 @@ router.route('/users')
             
     });
 
+router.use(function(req, res, next) {
+    // check header or url parameters or post parameters for token
+    if(req.method === 'GET')
+        next(null);
+    else{
+        var token = req.body.token || req.query.token || req.headers['x-access-token'];
+  // decode token
+        if (token) {
+
+    // verifies secret and checks exp
+      jwt.verify(token, 'Ivegotabikeyoucanrideitifyoulike', function(err, decoded) {      
+      if (err) {
+        res.json({ success: false, message: 'Failed to authenticate token.' });    
+      } else {
+        // if everything is good, save to request for use in other routes
+          req.decoded = decoded;
+        next(null);
+      }
+    });
+
+  } else {
+
+    // if there is no token
+    // return an error
+    res.status(403).send({ 
+        success: false, 
+        message: 'No token provided.' 
+    });
+    
+  }
+    }
+});
+
 router.route('/users/:email')
     .all(function(req, res,next){
     res.locals.origUser.readOne(db,function(result){
         res.locals.existingUser = result.pop();
-        next(null);
+        console.log(JSON.stringify(res.locals.existingUser));
+        if(!JSON.stringify(res.locals.existingUser))
+            res.status(404).send('Sorry we don\'t have the user you\'re looking for!');
+        else
+            next(null);
     });
     })
     .get(function(req, res){
         res.json(res.locals.existingUser);
     }) 
     .put(function(req, res){
-        res.locals.origUser.update(db,function(result){
-            res.json(result);
-                });
+        if(req.decoded.email === res.locals.existingUser.email){
+            res.locals.origUser.update(db,function(result){
+                res.json(result);
+            });
+        }else
+            res.json({message: "You're not "+ res.locals.existingUser.email + " You dumb-dumb!"});
+            
     })
     .delete(function(req, res){
+        if(req.decoded.email === res.locals.existingUser.email){
       res.locals.origUser.delete(db,function(result){
           res.json(result);
                 });
+        }else
+            res.json({message: "You're not "+ res.locals.existingUser.email + "You dumb-dumb!"});
     });
